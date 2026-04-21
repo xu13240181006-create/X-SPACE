@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>恐慌抄底信号器 v3.1</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#060a14;color:#e8ecf4;font-family:'Noto Sans SC',system-ui,sans-serif;padding:14px 10px}
+.m{font-family:'Courier New',monospace}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 8px rgba(0,229,160,0.3)}50%{box-shadow:0 0 20px rgba(0,229,160,0.6)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.P{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;margin-bottom:12px}
+.H{font-size:12px;font-weight:700;color:rgba(255,255,255,0.4);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px}
+button{font-family:inherit;cursor:pointer;transition:all 0.2s}
+.ab{padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.35)}
+.ab.on{background:rgba(240,192,64,0.1);border-color:rgba(240,192,64,0.3);color:#f0c040}
+.ab.btc{background:rgba(247,147,26,0.1);border-color:rgba(247,147,26,0.3);color:#f7931a}
+.pi{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e8ecf4;font-family:'Courier New',monospace;font-size:14px;font-weight:700;width:72px;padding:5px 6px;text-align:center;outline:none}
+.pi:focus{border-color:rgba(240,192,64,0.5)}
+.rb{background:linear-gradient(135deg,rgba(240,192,64,0.2),rgba(255,120,73,0.2));border:1px solid rgba(240,192,64,0.3);color:#f0c040;padding:7px 22px;border-radius:8px;font-size:13px;font-weight:700}
+.st::-webkit-scrollbar{width:4px}.st::-webkit-scrollbar-track{background:transparent}.st::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+.tog{padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.35);white-space:nowrap}
+.tog.on{background:rgba(0,229,160,0.12);border-color:rgba(0,229,160,0.3);color:#00e5a0}
+.fire{animation:pulse 2s ease-in-out infinite;border:2px solid rgba(0,229,160,0.5) !important}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,0.1);border-top-color:#f0c040;border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block}
+.apply-btn{padding:5px 14px;border-radius:6px;font-size:10px;font-weight:700;border:1px solid rgba(0,229,160,0.3);background:rgba(0,229,160,0.1);color:#00e5a0;white-space:nowrap}
+.tag{display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:600;margin-left:3px}
+.tag-ma{background:rgba(255,120,73,0.15);color:#ff7849}
+.tag-econ{background:rgba(255,45,85,0.15);color:#ff2d55}
+.tag-both{background:rgba(180,80,200,0.15);color:#c070e0}
+</style>
+</head>
+<body>
+<div style="text-align:center;margin-bottom:16px">
+<div style="font-size:10px;letter-spacing:4px;color:rgba(255,255,255,0.18);font-weight:600">CONTRARIAN ALPHA ENGINE · V3.1</div>
+<h1 style="font-size:22px;font-weight:800;margin:4px 0 0;background:linear-gradient(135deg,#00e5a0,#f0c040);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">恐慌抄底信号器</h1>
+<div style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:4px">SPY/QQQ: 情绪+均线+经济指标 · BTC: RSI+200周线+ahr999 · 独立逻辑</div>
+</div>
+
+<!-- ═══ LIVE ═══ -->
+<div id="live" class="P" style="border-color:rgba(240,192,64,0.15)">
+  <div class="H">📡 实时执行面板 <span id="liveStatus" style="font-size:9px;letter-spacing:0;text-transform:none;color:rgba(255,255,255,0.2)">加载中...</span></div>
+  <div id="execBar" style="margin-bottom:10px"></div>
+  <div id="liveCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px"></div>
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="rb" id="btnRefresh" data-action="refresh" style="font-size:11px;padding:5px 14px">🔄 刷新价格</button>
+    <span style="font-size:8px;color:rgba(255,255,255,0.1)">每5分钟自动刷新</span>
+    <span style="font-size:9px;color:rgba(255,255,255,0.15)" id="liveTime"></span>
+  </div>
+</div>
+
+<!-- ═══ HISTORY ═══ -->
+<div style="text-align:center;margin:16px 0 8px"><div style="font-size:10px;letter-spacing:2px;color:rgba(255,255,255,0.12);border-top:1px solid rgba(255,255,255,0.05);padding-top:12px">─── 历史回测 (研究层) ───</div></div>
+<div id="tabs" style="display:flex;gap:6px;justify-content:center;margin-bottom:14px"></div>
+<div id="ct"></div>
+<div style="font-size:9px;color:rgba(255,255,255,0.1);text-align:center;padding:10px 0">仅供研究学习，不构成投资建议</div>
+
+<script>
+// Global error handler - shows errors visually on mobile
+window.onerror=function(msg,url,line){
+  var d=document.getElementById('liveStatus');
+  if(d)d.innerHTML='<span style="color:#ff7849;font-size:9px">JS错误 L'+line+': '+String(msg).substring(0,60)+'</span>';
+  return false;
+};
+// Polyfill for Element.closest (old mobile webviews)
+if(!Element.prototype.closest){Element.prototype.closest=function(s){var el=this;do{if(el.matches(s))return el;el=el.parentElement||el.parentNode;}while(el!==null&&el.nodeType===1);return null;};}
+if(!Element.prototype.matches){Element.prototype.matches=Element.prototype.msMatchesSelector||Element.prototype.webkitMatchesSelector;}
+// ════════════════════════════════════════
+// DATA
+// ════════════════════════════════════════
+const RAW={SPY:[
+// {{SPY_DATA_START}}
+// {{SPY_DATA_END}}
+],QQQ:[
+// {{QQQ_DATA_START}}
+// {{QQQ_DATA_END}}
+],BTC:[
+// {{BTC_DATA_START}}
+// {{BTC_DATA_END}}
+]};
+// {{ECON_YC_START}}
+const ECON_YC={};
+// {{ECON_YC_END}}
+// {{ECON_HY_START}}
+const ECON_HY={};
+// {{ECON_HY_END}}
+// {{ECON_LEI_START}}
+const ECON_LEI={};
+// {{ECON_LEI_END}}
+
+const BTC_GENESIS=new Date('2009-01-03');
+const isBTC=()=>asset==='BTC';
+
+// ════════════════════════════════════════
+// DUAL PARAM SYSTEM — SPY/QQQ vs BTC completely separate
+// ════════════════════════════════════════
+// SPY/QQQ params
+let rp_stock={sent:20, dd:8, cool:8, ma:40, useMA:true, useEcon:true};
+let ep_stock={sent:20, dd:8, cool:8, ma:40, useMA:true, useEcon:true};
+// BTC params  
+let rp_btc={rsi:30, dd:25, cool:8, ma200w:true, ahr999:0.45};
+let ep_btc={rsi:30, dd:25, cool:8, ma200w:true, ahr999:0.45};
+
+let asset="SPY";
+let livePrices={SPY:null,QQQ:null,BTC:null};
+
+function paramsMatch(){
+  if(isBTC()){
+    return rp_btc.rsi===ep_btc.rsi&&rp_btc.dd===ep_btc.dd&&rp_btc.cool===ep_btc.cool&&rp_btc.ma200w===ep_btc.ma200w&&rp_btc.ahr999===ep_btc.ahr999;
+  }
+  const r=rp_stock,e=ep_stock;
+  return r.sent===e.sent&&r.dd===e.dd&&r.cool===e.cool&&r.ma===e.ma&&r.useMA===e.useMA&&r.useEcon===e.useEcon;
+}
+function allParamsMatch(){
+  const sm=rp_stock.sent===ep_stock.sent&&rp_stock.dd===ep_stock.dd&&rp_stock.cool===ep_stock.cool&&rp_stock.ma===ep_stock.ma&&rp_stock.useMA===ep_stock.useMA&&rp_stock.useEcon===ep_stock.useEcon;
+  const bm=rp_btc.rsi===ep_btc.rsi&&rp_btc.dd===ep_btc.dd&&rp_btc.cool===ep_btc.cool&&rp_btc.ma200w===ep_btc.ma200w&&rp_btc.ahr999===ep_btc.ahr999;
+  return sm&&bm;
+}
+function applyToExec(){
+  ep_stock={...rp_stock};ep_btc={...rp_btc};
+  renderExecBar();renderLive();
+}
+
+// ════════════════════════════════════════
+// CORE: SPY/QQQ functions (unchanged)
+// ════════════════════════════════════════
+function parse(a){return a.map(x=>({date:x[0],price:x[1],sentiment:x[2]}));}
+
+function getEcon(date){
+  let yc=null,hy=null,lei=null;
+  for(let m=0;m<4;m++){const dt=new Date(date);dt.setMonth(dt.getMonth()-m);const k=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+    if(yc===null&&ECON_YC[k]!==undefined)yc=ECON_YC[k];if(hy===null&&ECON_HY[k]!==undefined)hy=ECON_HY[k];if(lei===null&&ECON_LEI[k]!==undefined)lei=ECON_LEI[k];}
+  let score=3,flags=[],details=[];
+  if(yc!==null){if(yc<0){score--;flags.push("倒挂");details.push("YC"+yc.toFixed(2)+"→-1");}else details.push("YC"+yc.toFixed(2));}
+  if(hy!==null){if(hy>6){score--;flags.push("HY高");details.push("HY"+hy.toFixed(1)+"→-1");}else if(hy>5){score-=0.5;flags.push("HY偏高");details.push("HY"+hy.toFixed(1)+"→-0.5");}else details.push("HY"+hy.toFixed(1));}
+  if(lei!==null){if(lei<0){score--;flags.push("LEI负");details.push("LEI"+lei.toFixed(2)+"→-1");}else if(lei<0.5){score-=0.5;flags.push("LEI弱");details.push("LEI"+lei.toFixed(2)+"→-0.5");}else details.push("LEI"+lei.toFixed(1));}
+  return{yc,hy,lei,score:Math.max(0,score),flags,details};
+}
+
+function addMA(data,period){
+  for(let i=0;i<data.length;i++){
+    if(i<period-1)data[i].ma=data[i].price;
+    else{let s=0;for(let j=i-period+1;j<=i;j++)s+=data[j].price;data[i].ma=s/period;}
+    data[i].bull=data[i].price>=data[i].ma;
+    let rb=false;for(let j=0;j<Math.min(13,i+1);j++)if(data[i-j]&&data[i-j].bull)rb=true;
+    data[i].recentBull=rb;
+  }
+}
+
+function computeSentiment(data,lookback=10){
+  const n=data.length;
+  for(let i=Math.max(0,n-5);i<n;i++){
+    if(i<lookback){data[i].sentiment=50;continue;}
+    const mom=(data[i].price-data[i-lookback].price)/data[i-lookback].price;
+    let volSum=0;for(let j=i-lookback+1;j<=i;j++){const r=(data[j].price-data[j-1].price)/data[j-1].price;volSum+=r*r;}
+    const vol=Math.sqrt(volSum/lookback);
+    let momRank=0,volRank=0,cnt=0;
+    for(let j=lookback;j<=i;j++){
+      const m2=(data[j].price-data[j-lookback].price)/data[j-lookback].price;
+      let v2=0;for(let k=j-lookback+1;k<=j;k++){const r2=(data[k].price-data[k-1].price)/data[k-1].price;v2+=r2*r2;}v2=Math.sqrt(v2/lookback);
+      if(m2<mom)momRank++;if(v2<vol)volRank++;cnt++;
+    }
+    if(cnt>0){const mp=momRank/cnt*100,vp=100-volRank/cnt*100;data[i].sentiment=Math.max(0,Math.min(100,Math.round(mp*0.6+vp*0.4)));}
+    else data[i].sentiment=50;
+  }
+}
+
+function recalcSentiment(data,lookback=10){
+  // Find where new data starts (sentinel sentiment=50 after lookback period)
+  var startIdx=data.length;
+  for(var i=data.length-1;i>=lookback;i--){
+    if(data[i].sentiment===50)startIdx=i;
+    else break;
+  }
+  if(startIdx>=data.length)return; // nothing to recalculate
+  // Recalculate from startIdx
+  for(var i=startIdx;i<data.length;i++){
+    if(i<lookback){data[i].sentiment=50;continue;}
+    var mom=(data[i].price-data[i-lookback].price)/data[i-lookback].price;
+    var volSum=0;for(var j=i-lookback+1;j<=i;j++){var r=(data[j].price-data[j-1].price)/data[j-1].price;volSum+=r*r;}
+    var vol=Math.sqrt(volSum/lookback);
+    var momRank=0,volRank=0,cnt=0;
+    for(var j=lookback;j<=i;j++){
+      var m2=(data[j].price-data[j-lookback].price)/data[j-lookback].price;
+      var v2=0;for(var k=j-lookback+1;k<=j;k++){var r2=(data[k].price-data[k-1].price)/data[k-1].price;v2+=r2*r2;}v2=Math.sqrt(v2/lookback);
+      if(m2<mom)momRank++;if(v2<vol)volRank++;cnt++;
+    }
+    if(cnt>0){var mp=momRank/cnt*100,vp=100-volRank/cnt*100;data[i].sentiment=Math.max(0,Math.min(100,Math.round(mp*0.6+vp*0.4)));}
+    else data[i].sentiment=50;
+  }
+}
+
+// ════════════════════════════════════════
+// CORE: BTC-specific functions
+// ════════════════════════════════════════
+function calcWeeklyRSI(data, period=14){
+  // Calculate RSI on weekly closes
+  for(let i=0;i<data.length;i++){
+    if(i<period){data[i].rsi=50;continue;}
+    let gains=0,losses=0;
+    for(let j=i-period+1;j<=i;j++){
+      const chg=data[j].price-data[j-1].price;
+      if(chg>0)gains+=chg;else losses-=chg;
+    }
+    const avgGain=gains/period,avgLoss=losses/period;
+    if(avgLoss===0){data[i].rsi=100;continue;}
+    const rs=avgGain/avgLoss;
+    data[i].rsi=Math.round(100-100/(1+rs));
+  }
+}
+
+function calcAhr999(data){
+  // ahr999 = (price / 200-day geometric mean) * (price / log regression estimate)
+  // For weekly data: 200 days ≈ 29 weeks
+  const gmaWeeks=29;
+  for(let i=0;i<data.length;i++){
+    if(i<gmaWeeks){data[i].ahr999=null;continue;}
+    // Geometric mean of last 29 weeks
+    let logSum=0;
+    for(let j=i-gmaWeeks+1;j<=i;j++)logSum+=Math.log(data[j].price);
+    const gma=Math.exp(logSum/gmaWeeks);
+    // Log regression estimate: price = 10^(a * log10(days) + b)
+    // Fitted params (approximate from BTC history since 2009)
+    const daysSinceGenesis=Math.round((new Date(data[i].date)-BTC_GENESIS)/86400000);
+    if(daysSinceGenesis<=0){data[i].ahr999=null;continue;}
+    const logDays=Math.log10(daysSinceGenesis);
+    const estimatedPrice=Math.pow(10, 5.84 * logDays - 17.01);
+    // ahr999 = (price/gma) * (price/estimated)
+    const ahr=(data[i].price/gma)*(data[i].price/estimatedPrice);
+    data[i].ahr999=Math.round(ahr*100)/100;
+  }
+}
+
+function addMA200w(data){
+  for(let i=0;i<data.length;i++){
+    if(i<199)data[i].ma200w=data[i].price;
+    else{let s=0;for(let j=i-199;j<=i;j++)s+=data[j].price;data[i].ma200w=s/200;}
+    data[i].nearMA200w=data[i].price<=data[i].ma200w*1.2;
+  }
+}
+
+// ════════════════════════════════════════
+// SIGNAL FINDING — branched by asset type
+// ════════════════════════════════════════
+function findSignals_stock(data,p){
+  for(let i=0;i<data.length;i++){const start=Math.max(0,i-52);let hi=0;for(let j=start;j<=i;j++)hi=Math.max(hi,data[j].price);data[i].dd=(data[i].price-hi)/hi*100;}
+  const signals=[],filtered=[];let last=-p.cool-1;
+  for(let i=10;i<data.length;i++){const d=data[i];
+    if(d.sentiment<=p.sent&&d.dd<=-p.dd&&(i-last)>p.cool){
+      const future={};[[4,"1月"],[13,"3月"],[26,"半年"],[52,"1年"]].forEach(([w,l])=>{if(i+w<data.length)future[l]=Math.round((data[i+w].price-d.price)/d.price*1000)/10;else future[l]=null;});
+      const ec=getEcon(d.date);
+      const sig={idx:i,date:d.date,price:d.price,sent:d.sentiment,dd:Math.round(d.dd*10)/10,bull:d.bull,recentBull:d.recentBull,econ:ec.score,flags:ec.flags,details:ec.details,yc:ec.yc,hy:ec.hy,lei:ec.lei,future};
+      let reject=false,reasons=[],blockedLayers=[];
+      if(p.useMA&&!d.recentBull){reject=true;reasons.push("深熊");blockedLayers.push("均线");}
+      if(p.useEcon&&ec.score<2){reject=true;reasons.push(ec.flags.join("+"));blockedLayers.push("经济");}
+      sig.reject=reject;sig.reasons=reasons;sig.blockedLayers=blockedLayers;
+      if(reject)filtered.push(sig);else signals.push(sig);last=i;
+    }
+  }
+  return{signals,filtered};
+}
+
+function findSignals_btc(data,p){
+  calcWeeklyRSI(data);calcAhr999(data);addMA200w(data);
+  for(let i=0;i<data.length;i++){const start=Math.max(0,i-52);let hi=0;for(let j=start;j<=i;j++)hi=Math.max(hi,data[j].price);data[i].dd=(data[i].price-hi)/hi*100;}
+  const signals=[],filtered=[];let last=-p.cool-1;
+  for(let i=30;i<data.length;i++){const d=data[i];
+    if(d.rsi<=p.rsi&&d.dd<=-p.dd&&(i-last)>p.cool){
+      const future={};[[4,"1月"],[13,"3月"],[26,"半年"],[52,"1年"]].forEach(([w,l])=>{if(i+w<data.length)future[l]=Math.round((data[i+w].price-d.price)/d.price*1000)/10;else future[l]=null;});
+      const sig={idx:i,date:d.date,price:d.price,rsi:d.rsi,dd:Math.round(d.dd*10)/10,
+        ahr999:d.ahr999,ma200w:Math.round(d.ma200w),nearMA200w:d.nearMA200w,future};
+      let reject=false,reasons=[],blockedLayers=[];
+      if(p.ma200w&&!d.nearMA200w){reject=true;reasons.push("远离200周线");blockedLayers.push("200周线");}
+      if(d.ahr999!==null&&d.ahr999>=p.ahr999){reject=true;reasons.push("ahr999="+d.ahr999);blockedLayers.push("ahr999");}
+      sig.reject=reject;sig.reasons=reasons;sig.blockedLayers=blockedLayers;
+      if(reject)filtered.push(sig);else signals.push(sig);last=i;
+    }
+  }
+  return{signals,filtered};
+}
+
+// ════════════════════════════════════════
+// LIVE STATUS — branched
+// ════════════════════════════════════════
+function getStatus_stock(data, livePrice, p){
+  const d=data.map(x=>({...x}));
+  if(livePrice){d.push({date:new Date().toISOString().split('T')[0],price:livePrice,sentiment:50});computeSentiment(d);}
+  addMA(d,p.ma);
+  const last=d[d.length-1];
+  const start=Math.max(0,d.length-52);let hi52=0;for(let i=start;i<d.length;i++)hi52=Math.max(hi52,d[i].price);
+  const dd=(last.price-hi52)/hi52*100;
+  const ec=getEcon(last.date);
+  const sentOk=last.sentiment<=p.sent,ddOk=dd<=-p.dd,maOk=!p.useMA||last.recentBull,econOk=!p.useEcon||ec.score>=2;
+  let signal='safe',reason='';
+  if(sentOk&&ddOk){if(maOk&&econOk){signal='fire';reason='🔥 信号触发！';}else{signal='blocked';const b=[];if(!maOk)b.push('均线');if(!econOk)b.push('经济');reason='⛔ 拦截: '+b.join('+');}}
+  else if(last.sentiment<=p.sent+10&&dd<=-(p.dd-3)){signal='near';reason='⚠️ 接近触发';}
+  else{signal='safe';reason='😴 无信号';}
+  return{price:last.price,signal,reason,conds:[
+    {name:'情绪',ok:sentOk,val:last.sentiment,detail:'≤'+p.sent},
+    {name:'回撤',ok:ddOk,val:dd.toFixed(1)+'%',detail:'≥'+p.dd+'%'},
+    {name:'均线',ok:maOk,val:last.recentBull?'上方':'下方',detail:p.ma+'周'},
+    {name:'经济',ok:econOk,val:ec.score.toFixed(1)+'分',detail:ec.flags.length?ec.flags.join(' '):'健康'}
+  ]};
+}
+
+function getStatus_btc(data, livePrice, p){
+  const d=data.map(x=>({...x}));
+  if(livePrice){d.push({date:new Date().toISOString().split('T')[0],price:livePrice,sentiment:50});}
+  calcWeeklyRSI(d);calcAhr999(d);addMA200w(d);
+  const last=d[d.length-1];
+  const start=Math.max(0,d.length-52);let hi52=0;for(let i=start;i<d.length;i++)hi52=Math.max(hi52,d[i].price);
+  const dd=(last.price-hi52)/hi52*100;
+  const rsiOk=last.rsi<=p.rsi,ddOk=dd<=-p.dd,maOk=!p.ma200w||last.nearMA200w,ahrOk=last.ahr999===null||last.ahr999<p.ahr999;
+  let signal='safe',reason='';
+  if(rsiOk&&ddOk){if(maOk&&ahrOk){signal='fire';reason='🔥 BTC信号触发！';}else{signal='blocked';const b=[];if(!maOk)b.push('200周线');if(!ahrOk)b.push('ahr999');reason='⛔ 拦截: '+b.join('+');}}
+  else if(last.rsi<=p.rsi+10&&dd<=-(p.dd-5)){signal='near';reason='⚠️ 接近触发';}
+  else{signal='safe';reason='😴 无信号';}
+  return{price:last.price,signal,reason,conds:[
+    {name:'周RSI',ok:rsiOk,val:last.rsi,detail:'≤'+p.rsi},
+    {name:'回撤',ok:ddOk,val:dd.toFixed(1)+'%',detail:'≥'+p.dd+'%'},
+    {name:'200周线',ok:maOk,val:last.nearMA200w?'附近':'远离',detail:p.ma200w?'$'+last.ma200w.toLocaleString():'关闭'},
+    {name:'ahr999',ok:ahrOk,val:last.ahr999!==null?last.ahr999.toFixed(2):'—',detail:'<'+p.ahr999}
+  ]};
+}
+
+// ════════════════════════════════════════
+// EXEC BAR
+// ════════════════════════════════════════
+function renderExecBar(){
+  const match=allParamsMatch();
+  let h='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;font-size:9px">';
+  h+='<span style="color:rgba(255,255,255,0.3);font-weight:600">执行参数:</span>';
+  // Stock params
+  h+='<span style="color:rgba(255,255,255,0.2)">SPY/QQQ</span>';
+  h+='<span class="m" style="color:#f0c040">情绪≤'+ep_stock.sent+'</span>';
+  h+='<span class="m" style="color:#ff7849">回撤≥'+ep_stock.dd+'%</span>';
+  h+='<span style="color:'+(ep_stock.useMA?"#00e5a0":"#ff2d55")+'">'+(ep_stock.useMA?"✅":"❌")+'均线</span>';
+  h+='<span style="color:'+(ep_stock.useEcon?"#00e5a0":"#ff2d55")+'">'+(ep_stock.useEcon?"✅":"❌")+'经济</span>';
+  h+='<span style="color:rgba(255,255,255,0.08)">│</span>';
+  // BTC params
+  h+='<span style="color:#f7931a">BTC</span>';
+  h+='<span class="m" style="color:#f0c040">RSI≤'+ep_btc.rsi+'</span>';
+  h+='<span class="m" style="color:#ff7849">回撤≥'+ep_btc.dd+'%</span>';
+  h+='<span class="m" style="color:rgba(255,255,255,0.3)">ahr999<'+ep_btc.ahr999+'</span>';
+  if(!match){
+    h+='<span style="color:#f0c040;margin-left:auto">⚠ 已变更</span>';
+    h+='<button class="apply-btn" data-action="apply">📌 应用到实时区</button>';
+  } else {
+    h+='<span style="color:rgba(255,255,255,0.15);margin-left:auto">✓ 同步</span>';
+  }
+  h+='</div>';
+  document.getElementById('execBar').innerHTML=h;
+}
+
+// ════════════════════════════════════════
+// LIVE CARDS
+// ════════════════════════════════════════
+function renderLive(){
+  renderExecBar();
+  let html='';
+  ['SPY','QQQ','BTC'].forEach(name=>{
+    const data=parse(RAW[name]);
+    const st=name==='BTC'?getStatus_btc(data,livePrices[name],ep_btc):getStatus_stock(data,livePrices[name],ep_stock);
+    const isFire=st.signal==='fire',isNear=st.signal==='near',isBlocked=st.signal==='blocked';
+    const borderClass=isFire?'fire':'';
+    const bgColor=isFire?'rgba(0,229,160,0.06)':isNear?'rgba(240,192,64,0.04)':isBlocked?'rgba(255,45,85,0.04)':'rgba(255,255,255,0.02)';
+    const borderColor=isFire?'rgba(0,229,160,0.4)':isNear?'rgba(240,192,64,0.2)':isBlocked?'rgba(255,45,85,0.15)':'rgba(255,255,255,0.06)';
+    const accentColor=name==='BTC'?'#f7931a':'#f0c040';
+    
+    html+=`<div class="${borderClass}" style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:12px;text-align:center">`;
+    html+=`<div style="font-size:16px;font-weight:800;color:${accentColor};margin-bottom:2px">${name}</div>`;
+    html+=`<div class="m" style="font-size:18px;font-weight:800;color:rgba(255,255,255,0.8)">$${st.price?st.price.toLocaleString():'—'}</div>`;
+    html+=`<div style="font-size:10px;color:rgba(255,255,255,0.35);margin:4px 0 6px;min-height:20px">${st.reason}</div>`;
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:9px;text-align:left">`;
+    st.conds.forEach(c=>{
+      const color=c.ok?'rgba(0,229,160,0.7)':'rgba(255,45,85,0.7)';
+      html+=`<div style="padding:3px 5px;background:rgba(0,0,0,0.2);border-radius:4px;border-left:2px solid ${color}" title="${c.detail}">`;
+      html+=`<span style="color:rgba(255,255,255,0.3)">${c.name}</span> <span class="m" style="color:${color};font-weight:700">${c.ok?'✅':'❌'} ${c.val}</span></div>`;
+    });
+    html+=`</div>`;
+    html+=`<div style="font-size:8px;color:rgba(255,255,255,0.1);margin-top:4px">${name==='BTC'?'RSI+200周线+ahr999':'情绪+均线+'+(fredLastFetch>0?'FRED实时':'FRED嵌入')}</div>`;
+    html+=`</div>`;
+  });
+  document.getElementById('liveCards').innerHTML=html;
+}
+
+// ════════════════════════════════════════
+// PRICE FETCHING
+// ════════════════════════════════════════
+let fetchLog=[];
+async function tryFetch(url,timeout=8000){
+  const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),timeout);
+  try{const r=await fetch(url,{signal:ctrl.signal});clearTimeout(timer);if(!r.ok)return null;return await r.json();}
+  catch(e){clearTimeout(timer);fetchLog.push('✗ '+url.substring(0,50));return null;}
+}
+async function fetchBTC(){
+  let j=await tryFetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+  if(j&&j.price)return{price:parseFloat(j.price),src:'Binance'};
+  j=await tryFetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+  if(j&&j.bitcoin)return{price:j.bitcoin.usd,src:'CoinGecko'};
+  j=await tryFetch('https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD');
+  if(j&&j.USD)return{price:j.USD,src:'CryptoCompare'};
+  j=await tryFetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+  if(j&&j.data)return{price:parseFloat(j.data.amount),src:'Coinbase'};
+  return null;
+}
+async function fetchStock(sym){
+  const yfUrl='https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?range=1d&interval=1d';
+  const proxies=['https://corsproxy.io/?url=','https://api.allorigins.win/raw?url=','https://api.codetabs.com/v1/proxy?quest='];
+  for(const px of proxies){const j=await tryFetch(px+encodeURIComponent(yfUrl));if(j&&j.chart&&j.chart.result&&j.chart.result[0]&&j.chart.result[0].meta){const p=j.chart.result[0].meta.regularMarketPrice;if(p)return{price:p,src:'Yahoo'};}}
+  let j=await tryFetch('https://api.twelvedata.com/price?symbol='+sym+'&apikey=demo');
+  if(j&&j.price)return{price:parseFloat(j.price),src:'TwelveData'};
+  return null;
+}
+function doRefresh(){
+  var el=document.getElementById('liveStatus');
+  if(el)el.innerHTML='<span class="spinner"></span> 正在连接...';
+  try{
+    fetchLive().catch(function(err){
+      if(el)el.innerHTML='<span style="color:#ff7849">失败: '+String(err).substring(0,50)+'</span>';
+    });
+  }catch(err){
+    if(el)el.innerHTML='<span style="color:#ff7849">错误: '+String(err).substring(0,50)+'</span>';
+  }
+}
+async function fetchLive(){
+  const el=document.getElementById('liveStatus');
+  try{
+  el.innerHTML='<span class="spinner"></span>';fetchLog=[];
+  let ok=0,src=[];
+
+  // Fetch prices + FRED + recent weekly data all in parallel
+  const[b,s,q,econ,hist]=await Promise.all([fetchBTC(),fetchStock('SPY'),fetchStock('QQQ'),fetchFRED(),fetchRecentWeekly()]);
+  if(b){livePrices.BTC=b.price;ok++;src.push('BTC:'+b.src);}
+  if(s){livePrices.SPY=s.price;ok++;src.push('SPY:'+s.src);}
+  if(q){livePrices.QQQ=q.price;ok++;src.push('QQQ:'+q.src);}
+  ['SPY','QQQ','BTC'].forEach(a=>{if(!livePrices[a]){const d=RAW[a];if(d.length)livePrices[a]=d[d.length-1][1];}});
+
+  let econStatus='';
+  if(econ&&econ.updated>0){
+    econStatus=' <span style="color:#00e5a0">FRED✓'+econ.updated+'</span>';
+    src.push('FRED:'+econ.src);
+  }
+  let histStatus='';
+  if(hist&&hist.updated>0){
+    histStatus=' <span style="color:#00e5a0">回测+'+hist.updated+'</span>';
+    // Re-render backtest with new data
+    run();
+  }
+  el.innerHTML=(ok>0?'<span style="color:#00e5a0">✓'+ok+'实时</span>':'<span style="color:#ff7849">嵌入</span>')+econStatus+histStatus+' <span style="color:rgba(255,255,255,0.1)">'+src.join(' ')+'</span>';
+  document.getElementById('liveTime').textContent=new Date().toLocaleString('zh-CN');
+  renderLive();
+  }catch(e){
+    el.innerHTML='<span style="color:#ff7849">错误:'+e.message.substring(0,30)+'</span>';
+    ['SPY','QQQ','BTC'].forEach(a=>{if(!livePrices[a]){const d=RAW[a];if(d.length)livePrices[a]=d[d.length-1][1];}});
+    renderLive();
+  }
+}
+
+// ════════════════════════════════════════
+// RECENT WEEKLY DATA FETCH — append to embedded RAW data
+// ════════════════════════════════════════
+let histLastFetch=0;
+async function fetchRecentWeekly(){
+  const now=Date.now();
+  if(now-histLastFetch<3600*1000&&histLastFetch>0)return{updated:0};
+  
+  let updated=0;
+  const proxies=['https://corsproxy.io/?url=','https://api.allorigins.win/raw?url='];
+  
+  // SPY & QQQ: Yahoo Finance weekly data (last 6 months)
+  for(const sym of ['SPY','QQQ']){
+    const yfUrl='https://query1.finance.yahoo.com/v8/finance/chart/'+sym+'?range=6mo&interval=1wk';
+    for(const px of proxies){
+      try{
+        const ctrl=new AbortController();
+        const timer=setTimeout(function(){ctrl.abort();},8000);
+        const r=await fetch(px+encodeURIComponent(yfUrl),{signal:ctrl.signal});
+        clearTimeout(timer);
+        if(!r.ok)continue;
+        const j=await r.json();
+        if(j&&j.chart&&j.chart.result&&j.chart.result[0]){
+          const res=j.chart.result[0];
+          const ts=res.timestamp;
+          const closes=res.indicators&&res.indicators.quote&&res.indicators.quote[0]?res.indicators.quote[0].close:null;
+          if(ts&&closes&&ts.length===closes.length){
+            var merged=mergeWeekly(RAW[sym],ts,closes);
+            if(merged>0){updated++;fetchLog.push('✓ '+sym+' +'+merged+'周');}
+          }
+          break;
+        }
+      }catch(e){}
+    }
+  }
+  
+  // BTC: CoinGecko daily data (last 180 days), convert to weekly
+  try{
+    var j=await tryFetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=180&interval=daily');
+    if(j&&j.prices){
+      var weekMap={};
+      j.prices.forEach(function(p){
+        var dt=new Date(p[0]);
+        var key=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+        var yr=dt.getFullYear();
+        var wk=Math.ceil((((dt-new Date(yr,0,1))/86400000)+new Date(yr,0,1).getDay()+1)/7);
+        var wkey=yr+'-'+String(wk).padStart(2,'0');
+        weekMap[wkey]={date:key,price:Math.round(p[1]*100)/100};
+      });
+      // Get last embedded date
+      var lastDate=RAW.BTC.length>0?RAW.BTC[RAW.BTC.length-1][0]:'2000-01-01';
+      var added=0;
+      Object.keys(weekMap).sort().forEach(function(wk){
+        var w=weekMap[wk];
+        if(w.date>lastDate){
+          RAW.BTC.push([w.date,w.price,50]);
+          added++;
+        }
+      });
+      if(added>0){updated++;fetchLog.push('✓ BTC +'+added+'周');}
+    }
+  }catch(e){}
+  
+  if(updated>0)histLastFetch=now;
+  return{updated:updated};
+}
+
+function mergeWeekly(rawArr,timestamps,closes){
+  // rawArr is [[date,price,sentiment],...]
+  // Get last embedded date
+  var lastDate=rawArr.length>0?rawArr[rawArr.length-1][0]:'2000-01-01';
+  var added=0;
+  for(var i=0;i<timestamps.length;i++){
+    if(closes[i]===null||closes[i]===undefined)continue;
+    var dt=new Date(timestamps[i]*1000);
+    var ds=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+    if(ds>lastDate){
+      rawArr.push([ds,Math.round(closes[i]*100)/100,50]);
+      added++;
+    }
+  }
+  return added;
+}
+
+// ════════════════════════════════════════
+// FRED DATA FETCHING (no API key needed)
+// ════════════════════════════════════════
+let fredLastFetch=0;
+async function fetchFRED(){
+  const now=Date.now();
+  if(now-fredLastFetch<6*3600*1000&&fredLastFetch>0)return{updated:0,src:'cached'};
+
+  const proxies=['https://corsproxy.io/?url=','https://api.allorigins.win/raw?url='];
+  const seriesIds=['T10Y2Y','BAMLH0A0HYM2','USSLIND'];
+  let updated=0,usedProxy='';
+
+  async function fetchOneSeries(id){
+    const fredUrl='https://fred.stlouisfed.org/graph/fredgraph.csv?id='+id+'&cosd=2024-01-01';
+    for(const px of proxies){
+      try{
+        const ctrl=new AbortController();
+        const timer=setTimeout(()=>ctrl.abort(),5000);
+        const r=await fetch(px+encodeURIComponent(fredUrl),{signal:ctrl.signal});
+        clearTimeout(timer);
+        if(r.ok){
+          const csv=await r.text();
+          usedProxy=px.includes('corsproxy')?'corsproxy':'allorigins';
+          return csv;
+        }
+      }catch(e){}
+    }
+    return null;
+  }
+
+  try{
+    const results=await Promise.all(seriesIds.map(id=>fetchOneSeries(id)));
+    const targets=[ECON_YC,ECON_HY,ECON_LEI];
+    results.forEach((csv,i)=>{
+      if(csv){
+        const n=parseFredCSV(csv,seriesIds[i]);
+        if(n>0)updated++;
+      }
+    });
+  }catch(e){fetchLog.push('FRED error: '+e.message);}
+  if(updated>0)fredLastFetch=now;
+  return{updated,src:usedProxy};
+}
+
+function parseFredCSV(csv,seriesId){
+  // FRED CSV format: DATE,VALUE (header) then rows
+  const lines=csv.trim().split('\n');
+  if(lines.length<2)return 0;
+  let count=0;
+  const target=seriesId==='T10Y2Y'?ECON_YC:seriesId==='BAMLH0A0HYM2'?ECON_HY:ECON_LEI;
+  for(let i=1;i<lines.length;i++){
+    const parts=lines[i].split(',');
+    if(parts.length<2)continue;
+    const date=parts[0].trim();
+    const val=parts[1].trim();
+    if(!date||val==='.'||val==='')continue;
+    const num=parseFloat(val);
+    if(isNaN(num))continue;
+    const ym=date.substring(0,7); // "2024-03"
+    target[ym]=num;
+    count++;
+  }
+  return count;
+}
+
+// ════════════════════════════════════════
+// CHART (shared)
+// ════════════════════════════════════════
+function chart(data,signals,filtered){
+  if(!data||data.length<2)return"";
+  const W=720,HH=280,pt=20,pr=48,pb=28,pl=8,w=W-pl-pr,h=HH-pt-pb;
+  const ps=data.map(d=>d.price),mn=Math.min(...ps),mx=Math.max(...ps),r=mx-mn||1;
+  const px=i=>pl+(i/(data.length-1))*w,py=p=>pt+h-((p-mn)/r)*h;
+  const step=data.length>500?Math.ceil(data.length/500):1;
+  let pP="",mP="",f=true;
+  for(let i=0;i<data.length;i+=step){const c=f?"M":"L";f=false;pP+=c+px(i)+","+py(data[i].price)+" ";
+    const mVal=isBTC()?(data[i].ma200w||data[i].price):(data[i].ma||data[i].price);
+    mP+=c+px(i)+","+py(mVal)+" ";}
+  const last=data.length-1;pP+="L"+px(last)+","+py(data[last].price);
+  let g="";[0,.25,.5,.75,1].forEach(ff=>{const p=mn+r*ff,y=py(p);const l=p>=10000?"$"+(p/1000).toFixed(0)+"k":p>=1000?"$"+(p/1000).toFixed(1)+"k":"$"+p.toFixed(0);g+='<line x1="'+pl+'" y1="'+y+'" x2="'+(pl+w)+'" y2="'+y+'" stroke="rgba(255,255,255,0.04)"/><text x="'+(pl+w+4)+'" y="'+(y+3)+'" fill="rgba(255,255,255,0.2)" font-size="8">'+l+'</text>';});
+  const ds=Math.max(1,Math.floor(data.length/8));let dl="";
+  for(let i=0;i<data.length;i+=ds){const d=new Date(data[i].date);dl+='<text x="'+px(i)+'" y="'+(pt+h+15)+'" fill="rgba(255,255,255,0.2)" font-size="7" text-anchor="middle">'+d.getFullYear()+'.'+(d.getMonth()+1)+'</text>';}
+  let fs="";filtered.forEach(s=>{const x=px(s.idx),y=py(s.price);fs+='<line x1="'+(x-4)+'" y1="'+(y-4)+'" x2="'+(x+4)+'" y2="'+(y+4)+'" stroke="#ff2d55" stroke-width="2" opacity="0.4"/><line x1="'+(x+4)+'" y1="'+(y-4)+'" x2="'+(x-4)+'" y2="'+(y+4)+'" stroke="#ff2d55" stroke-width="2" opacity="0.4"/>';});
+  let ts="";signals.forEach((s,si)=>{const x=px(s.idx),y=py(s.price);ts+='<circle cx="'+x+'" cy="'+y+'" r="5" fill="#00e5a0" stroke="#0a0f1a" stroke-width="2"/><text x="'+x+'" y="'+(pt+8)+'" fill="#00e5a0" font-size="7" font-weight="700" text-anchor="middle">'+(si+1)+'</text>';});
+  const maColor=isBTC()?'rgba(247,147,26,0.3)':'rgba(255,120,73,0.3)';
+  const maLabel=isBTC()?'200周线':'均线';
+  return '<svg width="'+W+'" height="'+HH+'" style="display:block;max-width:100%">'+g+dl+'<path d="'+pP+'" fill="none" stroke="rgba(100,140,255,0.6)" stroke-width="1.5"/><path d="'+mP+'" fill="none" stroke="'+maColor+'" stroke-width="1" stroke-dasharray="4,4"/>'+fs+ts+'</svg>';
+}
+
+// ════════════════════════════════════════
+// MAIN RENDER — branched by asset
+// ════════════════════════════════════════
+function run(){
+  const data=parse(RAW[asset]);
+  const yrs=((new Date(data[data.length-1].date)-new Date(data[0].date))/31536e6).toFixed(1);
+  let o='<div style="max-width:800px;margin:0 auto;animation:fadeIn 0.4s ease-out">';
+  o+='<div style="text-align:center;font-size:10px;color:rgba(255,255,255,0.25);margin-bottom:12px">'+data.length+'周 · '+data[0].date+' → '+data[data.length-1].date+' ('+yrs+'年)</div>';
+
+  if(isBTC()){
+    // ── BTC MODE ──
+    calcWeeklyRSI(data);calcAhr999(data);addMA200w(data);
+    const{signals,filtered}=findSignals_btc(data,rp_btc);
+    const periods=["1月","3月","半年","1年"];
+    const stats={};periods.forEach(p=>{const rets=signals.map(s=>s.future[p]).filter(r=>r!==null);const wins=rets.filter(r=>r>0).length;stats[p]={n:rets.length,wins,wr:rets.length?Math.round(wins/rets.length*100):0,avg:rets.length?Math.round(rets.reduce((a,b)=>a+b,0)/rets.length*10)/10:0};});
+
+    // Params
+    o+='<div class="P" style="border-color:rgba(247,147,26,0.15)"><div class="H" style="color:#f7931a">₿ BTC 研究参数</div>';
+    o+='<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px">';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">周RSI≤</div><input class="pi" type="number" id="p_rsi" value="'+rp_btc.rsi+'" min="10" max="50" style="color:#f7931a"></div>';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">回撤≥%</div><input class="pi" type="number" id="p_d" value="'+rp_btc.dd+'" min="10" max="80" style="color:#ff7849"></div>';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">冷却周</div><input class="pi" type="number" id="p_c" value="'+rp_btc.cool+'" min="0" max="52" style="color:#f0c040"></div>';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">ahr999<</div><input class="pi" type="number" id="p_ahr" value="'+rp_btc.ahr999+'" min="0.1" max="2" step="0.05" style="color:#00e5a0;width:80px"></div>';
+    o+='<button class="tog '+(rp_btc.ma200w?"on":"")+'" data-action="toggle-btc-ma" style="font-size:10px">'+(rp_btc.ma200w?"✅":"❌")+' 200周线</button>';
+    o+='<button class="rb" data-action="scan">▶ 扫描</button>';
+    if(!paramsMatch())o+='<button class="apply-btn" data-action="apply">📌 应用到实时区</button>';
+    o+='</div>';
+    o+='<div style="font-size:9px;color:rgba(255,255,255,0.15);margin-top:6px">BTC专用逻辑: 周RSI超卖 + 大回撤 → 200周均线过滤 + ahr999估值过滤。不使用FRED宏观数据。</div></div>';
+
+    // Stats
+    o+='<div class="P"><div class="H">'+signals.length+'次信号 · 信号后收益</div>';
+    o+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">';
+    periods.forEach(p=>{const s=stats[p];const wrC=s.wr>=70?"#00e5a0":s.wr>=50?"#7ae582":"#ff7849";const avgC=s.avg>=0?"#00e5a0":"#ff2d55";
+      o+='<div style="text-align:center;padding:10px 4px;border-radius:8px;background:rgba(255,255,255,0.02)">';
+      o+='<div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:6px">'+p+'后</div>';
+      o+='<div class="m" style="font-size:22px;font-weight:800;color:'+wrC+'">'+s.wr+'%</div>';
+      o+='<div style="font-size:9px;color:rgba(255,255,255,0.3)">'+s.wins+'/'+s.n+'</div>';
+      o+='<div class="m" style="font-size:14px;font-weight:700;color:'+avgC+';margin-top:4px">'+(s.avg>=0?"+":"")+s.avg+'%</div></div>';});
+    o+='</div>';
+    if(signals.length<=10)o+='<div style="font-size:9px;color:rgba(255,255,255,0.15);margin-top:6px;text-align:center">⚠️ BTC数据仅7.5年，样本量极少，仅供参考</div>';
+    o+='</div>';
+
+    // Chart
+    o+='<div class="P"><div class="H">BTC · 信号 · 200周线</div>'+chart(data,signals,filtered)+'</div>';
+
+    // Signal table — BTC specific columns
+    o+='<div class="P"><div class="H">信号明细</div><div class="st" style="overflow-x:auto;max-height:350px"><table style="width:100%;font-size:9px;border-collapse:collapse;min-width:600px">';
+    o+='<thead><tr style="position:sticky;top:0;background:#0a0f1a">';
+    ["#","日期","价格","RSI","回撤","200周线","ahr999","1月","3月","半年","1年"].forEach(h=>{o+='<th style="text-align:right;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.4)">'+h+'</th>';});
+    o+='</tr></thead><tbody>';
+    signals.forEach((s,i)=>{
+      o+='<tr style="border-bottom:1px solid rgba(255,255,255,0.03)">';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.2)">'+(i+1)+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.4)">'+s.date+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.6)">$'+s.price.toLocaleString()+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:'+(s.rsi<=30?"#00e5a0":"#7ae582")+'">'+s.rsi+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:#ff7849">'+s.dd+'%</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.3)">$'+s.ma200w.toLocaleString()+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:'+(s.ahr999!==null&&s.ahr999<0.45?"#00e5a0":"rgba(255,255,255,0.3)")+'">'+(s.ahr999!==null?s.ahr999.toFixed(2):"—")+'</td>';
+      ["1月","3月","半年","1年"].forEach(p=>{const r=s.future[p];
+        if(r===null)o+='<td style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.1)">—</td>';
+        else{const c=r>0?"#00e5a0":"#ff2d55";o+='<td class="m" style="padding:3px 4px;text-align:right;color:'+c+'">'+(r>0?"+":"")+r+'%</td>';}});
+      o+='</tr>';});
+    o+='</tbody></table></div>';
+    // Filtered
+    if(filtered.length){
+      o+='<details style="margin-top:8px"><summary style="font-size:10px;color:#ff2d55;cursor:pointer">🚫 '+filtered.length+'个已过滤</summary><div style="margin-top:6px;font-size:9px">';
+      filtered.forEach(s=>{
+        const r3=s.future["3月"],r1=s.future["1年"];
+        const tags=s.blockedLayers.map(l=>'<span class="tag tag-ma">'+l+'</span>').join('');
+        o+='<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,0.03)"><span class="m" style="color:rgba(255,255,255,0.3)">'+s.date+' $'+s.price.toLocaleString()+'</span> '+tags+' <span style="color:rgba(255,255,255,0.15)">RSI'+s.rsi+' ahr999='+(s.ahr999||'—')+'</span>';
+        if(r3!==null)o+=' <span class="m" style="color:'+(r3>=0?"#00e5a0":"#ff2d55")+'">3月'+(r3>=0?"+":"")+r3+'%</span>';
+        if(r1!==null)o+=' <span class="m" style="color:'+(r1>=0?"#00e5a0":"#ff2d55")+'">1年'+(r1>=0?"+":"")+r1+'%</span>';
+        o+='</div>';});
+      o+='</div></details>';}
+    o+='</div>';
+
+    // System doc BTC
+    o+='<div class="P" style="border-color:rgba(247,147,26,0.08)"><div style="font-size:10px;font-weight:600;color:#f7931a;margin-bottom:4px">₿ BTC 系统说明</div><div style="font-size:10px;color:rgba(255,255,255,0.2);line-height:1.8">';
+    o+='<b style="color:#f0c040">触发</b>: 周RSI≤'+rp_btc.rsi+' + 52周高点回撤≥'+rp_btc.dd+'%<br>';
+    o+='<b style="color:#f0c040">过滤层1·200周线</b>: 价格≤200周均线×1.2 → 排除牛市正常回调<br>';
+    o+='<b style="color:#f0c040">过滤层2·ahr999</b>: <'+rp_btc.ahr999+' → 确认处于估值低位 (200日几何均线×对数回归)<br>';
+    o+='<b style="color:#00e5a0">通过过滤</b> = RSI超卖 + 价格在200周线附近 + ahr999确认低估 = 周期性大底<br>';
+    o+='<b style="color:rgba(255,255,255,0.4)">与SPY/QQQ的区别</b>: 不使用FRED宏观指标，不使用合成情绪。BTC有自己的周期逻辑。<br>';
+    o+='<b style="color:rgba(255,255,255,0.4)">已知局限</b>: ①数据仅7.5年 ②ahr999的对数回归拟合参数可能需随时间调整 ③链上指标(MVRV/盈亏比)因数据源限制未纳入</div></div>';
+
+  } else {
+    // ── STOCK MODE (SPY/QQQ — unchanged logic) ──
+    recalcSentiment(data);
+    addMA(data,rp_stock.ma);
+    const{signals,filtered}=findSignals_stock(data,rp_stock);
+    const periods=["1月","2月","3月","半年","1年"];
+    const stats={};periods.forEach(p=>{const rets=signals.map(s=>s.future[p]).filter(r=>r!==null);const wins=rets.filter(r=>r>0).length;stats[p]={n:rets.length,wins,wr:rets.length?Math.round(wins/rets.length*100):0,avg:rets.length?Math.round(rets.reduce((a,b)=>a+b,0)/rets.length*10)/10:0};});
+
+    // Params
+    o+='<div class="P"><div class="H">研究参数 (可调)</div><div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px">';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">恐慌≤</div><input class="pi" type="number" id="p_s" value="'+rp_stock.sent+'" min="5" max="40" style="color:#00e5a0"></div>';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">回撤≥%</div><input class="pi" type="number" id="p_d" value="'+rp_stock.dd+'" min="3" max="50" style="color:#ff7849"></div>';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">冷却周</div><input class="pi" type="number" id="p_c" value="'+rp_stock.cool+'" min="0" max="52" style="color:#f0c040"></div>';
+    o+='<div><div style="font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:3px">均线周</div><input class="pi" type="number" id="p_m" value="'+rp_stock.ma+'" min="10" max="100" style="color:#ff7849"></div>';
+    o+='<div style="display:flex;flex-direction:column;gap:4px;padding-bottom:2px">';
+    o+='<button class="tog '+(rp_stock.useMA?"on":"")+'" data-action="toggle-stock-ma" style="font-size:10px">'+(rp_stock.useMA?"✅":"❌")+' 均线</button>';
+    o+='<button class="tog '+(rp_stock.useEcon?"on":"")+'" data-action="toggle-stock-econ" style="font-size:10px">'+(rp_stock.useEcon?"✅":"❌")+' 经济</button></div>';
+    o+='<button class="rb" data-action="scan">▶ 扫描</button>';
+    if(!paramsMatch())o+='<button class="apply-btn" data-action="apply">📌 应用到实时区</button>';
+    o+='</div></div>';
+
+    // Stats
+    o+='<div class="P"><div class="H">'+signals.length+'次信号 · 信号后收益统计 <span style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:rgba(255,255,255,0.15)">(非完整策略回测)</span></div>';
+    o+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">';
+    periods.forEach(p=>{const s=stats[p];const wrC=s.wr>=70?"#00e5a0":s.wr>=55?"#7ae582":s.wr>=45?"#f0c040":"#ff7849";const avgC=s.avg>=0?"#00e5a0":"#ff2d55";
+      o+='<div style="text-align:center;padding:10px 4px;border-radius:8px;background:rgba(255,255,255,0.02)">';
+      o+='<div style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:6px">'+p+'后</div>';
+      o+='<div class="m" style="font-size:22px;font-weight:800;color:'+wrC+'">'+s.wr+'%</div>';
+      o+='<div style="font-size:9px;color:rgba(255,255,255,0.3)">'+s.wins+'/'+s.n+'</div>';
+      o+='<div class="m" style="font-size:14px;font-weight:700;color:'+avgC+';margin-top:4px">'+(s.avg>=0?"+":"")+s.avg+'%</div></div>';});
+    o+='</div>';
+    if(signals.length<=20)o+='<div style="font-size:9px;color:rgba(255,255,255,0.15);margin-top:6px;text-align:center">⚠️ 样本量'+signals.length+'次，适合方向验证</div>';
+    o+='</div>';
+
+    // Chart
+    o+='<div class="P"><div class="H">价格 · 信号</div>'+chart(data,signals,filtered)+'</div>';
+
+    // Signal table
+    o+='<div class="P"><div class="H">信号明细 <span style="font-size:9px;font-weight:400;letter-spacing:0;text-transform:none;color:rgba(255,255,255,0.15)">经济: 满分3，≥2.0放行</span></div>';
+    o+='<div class="st" style="overflow-x:auto;max-height:350px"><table style="width:100%;font-size:9px;border-collapse:collapse;min-width:700px">';
+    o+='<thead><tr style="position:sticky;top:0;background:#0a0f1a">';
+    ["#","日期","价格","情绪","回撤","经济","YC","HY","LEI","扣分","1月","3月","半年","1年"].forEach(h=>{o+='<th style="text-align:right;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.4)">'+h+'</th>';});
+    o+='</tr></thead><tbody>';
+    signals.forEach((s,i)=>{
+      const passTag=s.econ>=2.0?'<span style="color:#00e5a0">✅'+s.econ.toFixed(1)+'</span>':'<span style="color:#ff2d55">❌'+s.econ.toFixed(1)+'</span>';
+      o+='<tr style="border-bottom:1px solid rgba(255,255,255,0.03)">';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.2)">'+(i+1)+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.4)">'+s.date+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.6)">$'+s.price.toLocaleString()+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:#00e5a0">'+s.sent+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:#ff7849">'+s.dd+'%</td>';
+      o+='<td style="padding:3px 4px;text-align:center">'+passTag+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:'+(s.yc!==null&&s.yc<0?"#ff2d55":"rgba(255,255,255,0.25)")+'">'+(s.yc!==null?s.yc.toFixed(2):"—")+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:'+(s.hy!==null&&s.hy>6?"#ff2d55":"rgba(255,255,255,0.25)")+'">'+(s.hy!==null?s.hy.toFixed(1):"—")+'</td>';
+      o+='<td class="m" style="padding:3px 4px;text-align:right;color:'+(s.lei!==null&&s.lei<0?"#ff2d55":"rgba(255,255,255,0.25)")+'">'+(s.lei!==null?s.lei.toFixed(1):"—")+'</td>';
+      o+='<td style="padding:3px 4px;font-size:8px;color:'+(s.flags.length?"#ff7849":"rgba(255,255,255,0.15)")+'">'+(s.flags.length?s.flags.join(' '):'—')+'</td>';
+      ["1月","3月","半年","1年"].forEach(p=>{const r=s.future[p];
+        if(r===null)o+='<td style="padding:3px 4px;text-align:right;color:rgba(255,255,255,0.1)">—</td>';
+        else{const c=r>0?"#00e5a0":"#ff2d55";o+='<td class="m" style="padding:3px 4px;text-align:right;color:'+c+'">'+(r>0?"+":"")+r+'%</td>';}});
+      o+='</tr>';});
+    o+='</tbody></table></div>';
+    if(filtered.length){
+      o+='<details style="margin-top:8px"><summary style="font-size:10px;color:#ff2d55;cursor:pointer">🚫 '+filtered.length+'个已过滤</summary><div style="margin-top:6px;font-size:9px">';
+      filtered.forEach(s=>{
+        const r3=s.future["3月"],r1=s.future["1年"];
+        const tags=s.blockedLayers.map(l=>l==='均线'?'<span class="tag tag-ma">均线</span>':'<span class="tag tag-econ">经济</span>').join('')+(s.blockedLayers.length>1?'<span class="tag tag-both">双重</span>':'');
+        o+='<div style="padding:3px 6px;border-bottom:1px solid rgba(255,255,255,0.03)"><span class="m" style="color:rgba(255,255,255,0.3)">'+s.date+' $'+s.price.toLocaleString()+'</span> '+tags;
+        if(r3!==null)o+=' <span class="m" style="color:'+(r3>=0?"#00e5a0":"#ff2d55")+'">3月'+(r3>=0?"+":"")+r3+'%</span>';
+        if(r1!==null)o+=' <span class="m" style="color:'+(r1>=0?"#00e5a0":"#ff2d55")+'">1年'+(r1>=0?"+":"")+r1+'%</span>';
+        o+='</div>';});
+      o+='</div></details>';}
+    o+='</div>';
+    // System doc
+    o+='<div class="P" style="border-color:rgba(255,255,255,0.04)"><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.3);margin-bottom:4px">系统说明</div><div style="font-size:10px;color:rgba(255,255,255,0.2);line-height:1.8">';
+    o+='<b style="color:#f0c040">触发</b>: 情绪≤'+rp_stock.sent+' + 回撤≥'+rp_stock.dd+'%<br>';
+    o+='<b style="color:#f0c040">过滤层1</b>: '+rp_stock.ma+'周均线 (12周内站上过=放行)<br>';
+    o+='<b style="color:#f0c040">过滤层2</b>: 经济≥2分 (YC倒挂-1/HY>6%-1/LEI<0-1)<br>';
+    o+='<b style="color:rgba(255,255,255,0.4)">已知局限</b>: 合成情绪有循环论证 / FRED月度精度 / 非完整策略回测 / 样本有限 / 历史≠未来</div></div>';
+  }
+  o+='</div>';
+  document.getElementById("ct").innerHTML=o;
+  renderExecBar();
+}
+
+// ════════════════════════════════════════
+// APPLY PARAMS
+// ════════════════════════════════════════
+function ap(){
+  const v=id=>{const el=document.getElementById(id);return el?parseFloat(el.value):NaN;};
+  if(isBTC()){
+    const r=v("p_rsi"),d=v("p_d"),c=v("p_c"),a=v("p_ahr");
+    if(!isNaN(r))rp_btc.rsi=Math.round(r);
+    if(!isNaN(d))rp_btc.dd=Math.round(d);
+    if(!isNaN(c))rp_btc.cool=Math.round(c);
+    if(!isNaN(a)&&a>0&&a<2)rp_btc.ahr999=Math.round(a*100)/100;
+  } else {
+    const s=v("p_s"),d=v("p_d"),c=v("p_c"),m=v("p_m");
+    if(!isNaN(s))rp_stock.sent=Math.round(s);
+    if(!isNaN(d))rp_stock.dd=Math.round(d);
+    if(!isNaN(c))rp_stock.cool=Math.round(c);
+    if(!isNaN(m))rp_stock.ma=Math.round(m);
+  }
+  run();
+}
+
+function render(){
+  document.getElementById("tabs").innerHTML=["SPY","QQQ","BTC"].map(a=>{
+    const cls=asset===a?"on":"";
+    const extra=a==='BTC'&&asset==='BTC'?' btc':'';
+    return '<button class="ab '+cls+extra+'" data-action="tab" data-asset="'+a+'">'+a+'</button>';
+  }).join("");
+  run();
+}
+
+document.addEventListener("keydown",function(e){if(e.key==="Enter")ap();});
+
+// ════════════════════════════════════════
+// EVENT DELEGATION — no inline onclick, works in sandboxed webviews
+// ════════════════════════════════════════
+function handleAction(actionEl){
+  if(!actionEl)return;
+  var action=actionEl.getAttribute("data-action");
+  if(!action)return;
+  if(action==="refresh"){doRefresh();}
+  else if(action==="scan"){ap();}
+  else if(action==="apply"){applyToExec();}
+  else if(action==="tab"){
+    var a=actionEl.getAttribute("data-asset");
+    if(a){asset=a;render();}
+  }
+  else if(action==="toggle-stock-ma"){rp_stock.useMA=!rp_stock.useMA;run();renderExecBar();}
+  else if(action==="toggle-stock-econ"){rp_stock.useEcon=!rp_stock.useEcon;run();renderExecBar();}
+  else if(action==="toggle-btc-ma"){rp_btc.ma200w=!rp_btc.ma200w;run();renderExecBar();}
+}
+
+// Click for desktop
+document.addEventListener("click",function(e){
+  var el=e.target.closest("[data-action]");
+  if(el)handleAction(el);
+});
+
+// Touch for mobile — use touchend to avoid double-fire
+var touchMoved=false;
+document.addEventListener("touchstart",function(){touchMoved=false;},{passive:true});
+document.addEventListener("touchmove",function(){touchMoved=true;},{passive:true});
+document.addEventListener("touchend",function(e){
+  if(touchMoved)return;
+  var el=e.target.closest("[data-action]");
+  if(el){e.preventDefault();handleAction(el);}
+});
+
+// Also bind refresh button by ID as fallback
+document.getElementById("btnRefresh").addEventListener("click",function(){doRefresh();});
+document.getElementById("btnRefresh").addEventListener("touchend",function(e){e.preventDefault();doRefresh();});
+
+render();
+
+// Init: single fetch with retry, then auto-refresh
+var autoTimer=null;
+function startAutoRefresh(){
+  if(autoTimer)clearInterval(autoTimer);
+  autoTimer=setInterval(doRefresh, 5*60*1000);
+}
+setTimeout(function(){doRefresh();startAutoRefresh();}, 300);
+</script>
+</body>
+</html>
