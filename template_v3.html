@@ -47,6 +47,7 @@ button{font-family:inherit;cursor:pointer;transition:all 0.2s}
   <div id="liveCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px"></div>
   <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <button class="rb" id="btnRefresh" data-action="refresh" style="font-size:11px;padding:5px 14px">🔄 刷新价格</button>
+    <button data-action="reset-params" style="font-size:10px;padding:5px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:6px;cursor:pointer">↺ 恢复默认参数</button>
     <span style="font-size:8px;color:rgba(255,255,255,0.1)">每5分钟自动刷新</span>
     <span style="font-size:9px;color:rgba(255,255,255,0.15)" id="liveTime"></span>
   </div>
@@ -95,17 +96,80 @@ const BTC_GENESIS=new Date('2009-01-03');
 const isBTC=()=>asset==='BTC';
 
 // ════════════════════════════════════════
-// DUAL PARAM SYSTEM — SPY/QQQ vs BTC completely separate
+// PER-ASSET PARAMS + localStorage PERSISTENCE
 // ════════════════════════════════════════
-// SPY/QQQ params
-let rp_stock={sent:20, dd:8, cool:8, ma:40, useMA:true, useEcon:true};
-let ep_stock={sent:20, dd:8, cool:8, ma:40, useMA:true, useEcon:true};
-// BTC params  
-let rp_btc={rsi:30, dd:25, cool:8, ma200w:true, ahr999:0.45};
-let ep_btc={rsi:30, dd:25, cool:8, ma200w:true, ahr999:0.45};
+// 每个标的有自己的参数，改了自动存浏览器本地，下次打开恢复
+// 默认值基于历史回测综合评分（40%胜率+40%均收益+20%样本量对数）
+
+const DEFAULT_PARAMS = {
+  SPY: {sent:18, dd:12, cool:8, ma:30, useMA:true, useEcon:true},
+  QQQ: {sent:25, dd:15, cool:8, ma:30, useMA:true, useEcon:true},
+  BTC: {rsi:45, dd:15, cool:8, ma200w:true, ahr999:0.45}
+};
+
+const STORAGE_KEY = 'panic_signal_params_v1';
+
+function loadParams(){
+  try{
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved){
+      const p = JSON.parse(saved);
+      return {
+        SPY: {...DEFAULT_PARAMS.SPY, ...(p.SPY||{})},
+        QQQ: {...DEFAULT_PARAMS.QQQ, ...(p.QQQ||{})},
+        BTC: {...DEFAULT_PARAMS.BTC, ...(p.BTC||{})}
+      };
+    }
+  }catch(e){}
+  return {
+    SPY: {...DEFAULT_PARAMS.SPY},
+    QQQ: {...DEFAULT_PARAMS.QQQ},
+    BTC: {...DEFAULT_PARAMS.BTC}
+  };
+}
+
+function saveParams(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(PARAMS));
+  }catch(e){}
+}
+
+function resetParams(){
+  if(confirm('恢复所有标的的默认参数？当前所有修改将丢失。')){
+    PARAMS = {
+      SPY: {...DEFAULT_PARAMS.SPY},
+      QQQ: {...DEFAULT_PARAMS.QQQ},
+      BTC: {...DEFAULT_PARAMS.BTC}
+    };
+    saveParams();
+    syncCurrentParams();
+    run();
+    renderExecBar();
+    renderLive();
+  }
+}
+
+// PARAMS[SPY|QQQ|BTC] 是研究层参数，改了自动存
+let PARAMS = loadParams();
+
+// 执行层参数 = 当前查看标的的执行参数（应用到实时区后的快照）
+// 当前兼容层：rp_stock/ep_stock/rp_btc/ep_btc 指向 PARAMS
+let rp_stock = PARAMS.SPY;  // 当前 stock 研究参数（切换 SPY/QQQ 时会重新指向）
+let ep_stock = {...PARAMS.SPY};  // 执行参数（需手动应用）
+let rp_btc = PARAMS.BTC;
+let ep_btc = {...PARAMS.BTC};
 
 let asset="SPY";
 let livePrices={SPY:null,QQQ:null,BTC:null};
+
+function syncCurrentParams(){
+  // 切换标的时，把 rp_stock 指向当前 stock 参数
+  if(asset === 'BTC'){
+    rp_btc = PARAMS.BTC;
+  } else {
+    rp_stock = PARAMS[asset];  // SPY 或 QQQ
+  }
+}
 
 function paramsMatch(){
   if(isBTC()){
@@ -121,6 +185,7 @@ function allParamsMatch(){
 }
 function applyToExec(){
   ep_stock={...rp_stock};ep_btc={...rp_btc};
+  saveParams();
   renderExecBar();renderLive();
 }
 
@@ -821,6 +886,7 @@ function ap(){
     if(!isNaN(c))rp_stock.cool=Math.round(c);
     if(!isNaN(m))rp_stock.ma=Math.round(m);
   }
+  saveParams();  // 改完立刻存到浏览器
   run();
 }
 
@@ -847,11 +913,12 @@ function handleAction(actionEl){
   else if(action==="apply"){applyToExec();}
   else if(action==="tab"){
     var a=actionEl.getAttribute("data-asset");
-    if(a){asset=a;render();}
+    if(a){asset=a;syncCurrentParams();render();}
   }
-  else if(action==="toggle-stock-ma"){rp_stock.useMA=!rp_stock.useMA;run();renderExecBar();}
-  else if(action==="toggle-stock-econ"){rp_stock.useEcon=!rp_stock.useEcon;run();renderExecBar();}
-  else if(action==="toggle-btc-ma"){rp_btc.ma200w=!rp_btc.ma200w;run();renderExecBar();}
+  else if(action==="toggle-stock-ma"){rp_stock.useMA=!rp_stock.useMA;saveParams();run();renderExecBar();}
+  else if(action==="toggle-stock-econ"){rp_stock.useEcon=!rp_stock.useEcon;saveParams();run();renderExecBar();}
+  else if(action==="toggle-btc-ma"){rp_btc.ma200w=!rp_btc.ma200w;saveParams();run();renderExecBar();}
+  else if(action==="reset-params"){resetParams();}
 }
 
 // Click for desktop
