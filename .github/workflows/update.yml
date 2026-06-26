@@ -1,28 +1,30 @@
 name: 每日更新信号器数据
-
 on:
   schedule:
     - cron: '0 22 * * *'   # 每天UTC 22:00 = 北京时间早上6:00
   workflow_dispatch:        # 允许手动触发
-
+permissions:
+  contents: write
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: 拉代码
         uses: actions/checkout@v4
-
       - name: 装Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: 装依赖
         run: pip install requests
-
-      - name: 跑脚本(拉数据+部署)
+      - name: 跑脚本生成index.html
         env:
           EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
-          NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        run: python build_signal_html.py
+        run: python build_signal_html.py --no-deploy
+      - name: 提交index.html回仓库
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add index.html
+          git diff --staged --quiet || git commit -m "自动更新数据"
+          git push
